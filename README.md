@@ -1,30 +1,24 @@
-# 🚌 PMPML Transit Accessibility & Reliability Analytics
+#  PMPML Transit Accessibility & Reliability Analytics
 
 **An end-to-end data pipeline and interactive dashboard that turns Pune's public bus schedule data into actionable transit reliability insights.**
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue) ![DuckDB](https://img.shields.io/badge/DuckDB-Star%20Schema-yellow) ![NetworkX](https://img.shields.io/badge/NetworkX-Graph%20Algorithms-orange) ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red)
 
----
-
----
-
 ## Contents
 
-- [Why I built this](#-why-i-built-this)
-- [Key findings](#-key-findings)
-- [Dashboard preview](#️-dashboard-preview)
-- [System architecture](#️-system-architecture)
-- [Data model — star schema](#️-data-model--star-schema)
-- [How the ETA calculator works](#-how-the-eta-calculator-works)
-- [How the crowding risk model works](#-how-the-crowding-risk-model-works)
-- [Project structure](#-project-structure)
-- [Tech stack](#-tech-stack--what-each-tool-is-doing)
-- [Setup & run](#️-setup--run-locally)
-- [Known limitations](#️-known-limitations-stated-deliberately-not-hidden)
-- [Roadmap](#️-roadmap)
-- [Data source](#-data-source)
-
----
+- [Why I built this](#why-i-built-this)
+- [Key findings](#key-findings)
+- [Dashboard preview](#dashboard-preview)
+- [System architecture](#system-architecture)
+- [Data model — star schema](#data-model--star-schema)
+- [How the ETA calculator works](#how-the-eta-calculator-works)
+- [How the crowding risk model works](#how-the-crowding-risk-model-works)
+- [Project structure](#project-structure)
+- [Tech stack](#tech-stack--what-each-tool-is-doing)
+- [Setup & run](#setup--run-locally)
+- [Known limitations](#known-limitations-stated-deliberately-not-hidden)
+- [Roadmap](#roadmap)
+- [Data source](#data-source)
 
 ## Why I built this
 
@@ -35,8 +29,6 @@ Public transit agencies almost never publish real-time occupancy or delay data �
 3. **How fast can a rider realistically get from any stop to any other stop**, based on the actual timetable?
 
 This project is my end-to-end answer: a validated data warehouse, a custom reliability-risk model, a graph-based routing engine, and a live dashboard — built from raw schedule files up.
-
----
 
 ## Key Findings
 
@@ -50,14 +42,11 @@ This project is my end-to-end answer: a validated data warehouse, a custom relia
 
 *(Full ranked results: `data/processed/route_crowding_risk.csv`)*
 
----
-
 ## Dashboard Preview
 
 **Crowding Risk tab** — routes ranked by peak-hour headway-based risk score:
 
 ![Crowding risk dashboard](docs/images/crowd.png)
-(docs/images/crowd 2.png)
 
 **Stop Coverage tab** — all 6,203 stops plotted by real GPS location, revealing PMPML's hub-and-spoke network structure radiating from central Pune:
 
@@ -67,17 +56,13 @@ This project is my end-to-end answer: a validated data warehouse, a custom relia
 
 ![ETA calculator dashboard](docs/images/eta.png)
 
----
-
 ## System Architecture
 
 ![Data architecture pipeline](docs/images/architecture_pipeline.svg)
 
 Raw GTFS files are validated, loaded into a DuckDB star schema, then split into two parallel analysis stages — the headway-based crowding risk model and the NetworkX/Dijkstra ETA engine — both of which feed the Streamlit dashboard.
 
----
-
-##  Data Model — Star Schema
+## Data Model — Star Schema
 
 ```mermaid
 erDiagram
@@ -124,21 +109,19 @@ erDiagram
 
 **Why a star schema:** `fact_stop_times` holds every scheduled bus-stop event (455K+ rows), while the dimension tables hold descriptive context (stop names, route names, service calendar). This keeps the fact table lean and makes every analytical query — "trips per route," "stops per area," "headway per stop" — a simple join instead of a wide, repetitive flat table.
 
----
-
-##  How the ETA Calculator Works
+## How the ETA Calculator Works
 
 The ETA engine treats the entire bus network as a **directed graph** and finds the fastest scheduled path using **Dijkstra's algorithm** — the same core idea behind Google Maps routing.
 
 ```mermaid
 flowchart TD
-    A[fact_stop_times: every trip's<br/>ordered stop sequence] --> B["For each trip, pair every stop<br/>with the NEXT stop in sequence"]
-    B --> C["Compute scheduled travel time<br/>between each consecutive pair"]
-    C --> D["Group by (origin stop, destination stop)<br/>take the MEDIAN travel time across all trips"]
-    D --> E["Build directed graph:<br/>nodes = stops, edges = median travel time"]
-    E --> F[User selects Origin Stop & Destination Stop]
-    F --> G["Run Dijkstra's Algorithm<br/>(NetworkX single_source_dijkstra)"]
-    G --> H["Return: total ETA + full stop-by-stop path"]
+    A[fact_stop_times: every trip's ordered stop sequence] --> B["For each trip, pair every stop with the NEXT stop in sequence"]
+    B --> C["Compute scheduled travel time between each consecutive pair"]
+    C --> D["Group by origin/destination stop, take the MEDIAN travel time across all trips"]
+    D --> E["Build directed graph: nodes = stops, edges = median travel time"]
+    E --> F[User selects origin stop and destination stop]
+    F --> G["Run Dijkstra's algorithm (NetworkX single_source_dijkstra)"]
+    G --> H["Return total ETA plus full stop-by-stop path"]
 
     style D fill:#fff3cd,stroke:#997404
     style G fill:#cfe2ff,stroke:#084298
@@ -150,15 +133,11 @@ flowchart TD
 - **Directed graph, not undirected** — buses don't necessarily take symmetric routes in both directions, so A→B and B→A are modeled as separate edges.
 - **Known limitation:** the graph only connects stops that share a *direct* trip. ~12% of random stop-pairs need a transfer between two different routes, which isn't modeled yet — a natural next iteration (see Roadmap).
 
----
-
-##  How the Crowding Risk Model Works
+## How the Crowding Risk Model Works
 
 PMPML doesn't publish real occupancy data, so this model uses a standard transit-analytics proxy: **headway** — the time gap between consecutive buses on the same route, at the same stop, during peak hours.
 
-```
-Long, inconsistent headway during peak hours  →  passengers wait longer & pile up  →  higher crowding risk
-```
+Long, inconsistent headway during peak hours means passengers wait longer and pile up, which means higher crowding risk.
 
 For every route, I compute:
 - **Average peak-hour headway** — how long, on average, a rider waits
@@ -167,34 +146,30 @@ For every route, I compute:
 
 Weighted toward average wait time since that's the bigger driver of a rider's actual experience, with variability as a secondary signal.
 
----
-
-##  Project Structure
+## Project Structure
 
 ```
 ├── data/
-│   ├── raw/                      # Original GTFS feed (unmodified)
-│   │   ├── agency.txt, routes.txt, stops.txt, trips.txt
-│   │   ├── stop_times.txt, calendar.txt, shapes.txt, feed_info.txt
-│   └── processed/                # Pipeline outputs
-│       ├── dim_stops.csv, dim_routes.csv
-│       ├── route_crowding_risk.csv
-│       └── stop_graph_edges.csv, stop_graph_nodes.csv
+│   ├── raw/                      Original GTFS feed (unmodified)
+│   │   agency.txt, routes.txt, stops.txt, trips.txt
+│   │   stop_times.txt, calendar.txt, shapes.txt, feed_info.txt
+│   └── processed/                Pipeline outputs
+│       dim_stops.csv, dim_routes.csv
+│       route_crowding_risk.csv
+│       stop_graph_edges.csv, stop_graph_nodes.csv
 ├── src/
-│   ├── 01_data_quality_check.py   # Null/duplicate/referential-integrity validation
-│   ├── 02_build_star_schema.py    # DuckDB warehouse construction
-│   ├── 03_crowding_analysis.py    # Headway-based risk scoring
-│   └── 04_eta_engine.py           # Graph construction + Dijkstra ETA
+│   ├── 01_data_quality_check.py   Null/duplicate/referential-integrity validation
+│   ├── 02_build_star_schema.py    DuckDB warehouse construction
+│   ├── 03_crowding_analysis.py    Headway-based risk scoring
+│   └── 04_eta_engine.py           Graph construction + Dijkstra ETA
 ├── dashboard/
-│   └── app.py                     # Streamlit dashboard (3 tabs)
-├── docs/images/                   # Screenshots used in this README
+│   └── app.py                     Streamlit dashboard (3 tabs)
+├── docs/images/                   Screenshots used in this README
 ├── requirements.txt
 └── README.md
 ```
 
----
-
-##  Tech Stack & What Each Tool Is Doing
+## Tech Stack & What Each Tool Is Doing
 
 | Tool | Role in this project |
 |---|---|
@@ -204,31 +179,25 @@ Weighted toward average wait time since that's the bigger driver of a rider's ac
 | **Streamlit** | Interactive dashboard — crowding risk explorer, coverage map, ETA calculator |
 | **Matplotlib** | Static chart generation inside the dashboard |
 
----
-
-##  Setup & Run Locally
+## Setup & Run Locally
 
 ```bash
-git clone https://github.com/<your-username>/<repo-name>.git
-cd <repo-name>
+git clone https://github.com/XitijShinde PMPL-Bus-Transit-Analytics-Project.git
+cd <PMPL Bus Transit Analytics Project>
 
 python -m venv venv
-venv\Scripts\activate        
+venv\Scripts\activate
 pip install -r requirements.txt
 
-# Run the pipeline stages in order
 python src/01_data_quality_check.py
 python src/02_build_star_schema.py
 python src/03_crowding_analysis.py
 python src/04_eta_engine.py
 
-# Launch the dashboard
 streamlit run dashboard/app.py
 ```
 
-**Live demo:** _add your deployed Streamlit Cloud link here once deployed_
-
----
+**Live demo:** https://pmpl-bus-transit-analytics-project.streamlit.app/
 
 ## Known Limitations (stated deliberately, not hidden)
 
@@ -237,8 +206,6 @@ streamlit run dashboard/app.py
 - The ETA graph currently models only direct, single-route paths — about 12% of random stop pairs would require a transfer between two routes, which isn't modeled yet.
 
 I'd rather state these plainly than have the numbers misread as more precise than they are.
-
----
 
 ## Roadmap
 
@@ -251,10 +218,6 @@ I'd rather state these plainly than have the numbers misread as more precise tha
 - [ ] Validate crowding-risk signal against real ridership data, if it becomes available
 - [ ] Deploy live demo on Streamlit Community Cloud
 
----
-
 ## Data Source
 
 Schedule data sourced from PMPML's official GTFS feed via the open-source [`croyla/pmpml-gtfs`](https://github.com/croyla/pmpml-gtfs) project, which builds a standards-compliant [GTFS](https://gtfs.org/) feed from PMPML's public transit API. All data modeling, analysis, algorithms, and the dashboard in this repository are original work built on top of that raw feed.
-#   P M P L - B u s - T r a n s i t - A n a l y t i c s - P r o j e c t  
- 
